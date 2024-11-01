@@ -37,8 +37,7 @@ def main(argv):
   print(f"Loading checkpoint from {checkpoint_path}")
   model_and_loss.load_state_dict(torch.load(checkpoint_path, weights_only=True))
   model = model_and_loss.model.model
-  num_params = sum(p.numel() for p in model.parameters())
-  print(f"Model size: {num_params:,} parameters")
+  print(f"Model size: {sum(p.numel() for p in model.parameters())}")
 
   # get a prompt from the user
   prompt = input("Enter a prompt: ")
