@@ -1,0 +1,13 @@
+absl-py
+cblack
+datasets
+flatbuffers
+h5py
+Jinja2
+matplotlib
+numpy
+pandas
+pyarrow
+pydantic
+tensorflow
+torch
