@@ -70,9 +70,12 @@ class UnionLikeConfig(BaseConfig):
 
   @pydantic.model_validator(mode="after")
   def _validate_fields(self: Self) -> Self:
-    filled_fields = [f for f in self.model_fields.keys() if getattr(self, f) is not None]
+    filled_fields = [f for f in self.model_fields.keys() if bool(getattr(self, f))]
     if len(filled_fields) != 1:
-      raise ValueError(f"Exactly one field must be specified. Got: {filled_fields}")
+      raise ValueError(
+        f"Exactly one field must be specified. Got: {filled_fields}. "
+        f"Fields: {list(self.model_fields.keys())}"
+      )
     return self
 
   def which(self: Self) -> str:

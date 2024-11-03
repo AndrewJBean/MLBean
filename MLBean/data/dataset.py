@@ -14,17 +14,23 @@ class DatasetConfig(BaseConfig):
   batch_size: int
   trunc_len: int
   char_map_file: Optional[str] = None
+  group_size: Optional[int] = None
+  special_tokens_at_end: Optional[bool] = True
 
 
 # use ~/huggingface_cache for caching
 CACHE_DIR = os.path.expanduser("~/huggingface_cache")
 
 
-def input_label_split(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def input_label_split(
+  x: torch.Tensor, group_size: Optional[int] = None
+) -> Tuple[torch.Tensor, torch.Tensor]:
   """
   x: (batch_size, num_chars)
   """
-  return x[:, :-1], x[:, 1:]
+  if group_size is None:
+    group_size = 1
+  return x[:, :-group_size], x[:, group_size:]
 
 
 class FullExcerptDataset(torch.utils.data.IterableDataset):
@@ -34,7 +40,13 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
   PAD = "<PAD>"
 
   def __init__(
-    self, *, batch_size: int = 1, char_map_file: Optional[str] = None, trunc_len: int = 500
+    self,
+    *,
+    batch_size: int = 1,
+    char_map_file: Optional[str] = None,
+    trunc_len: int = 500,
+    group_size: Optional[int] = None,
+    special_tokens_at_end: Optional[bool] = True,
   ):
     if char_map_file is None:
       this_file_directory = os.path.dirname(os.path.realpath(__file__))
@@ -42,20 +54,30 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     self.batch_size = batch_size
     self.ds = None
     self.trunc_len = trunc_len
+    self.group_size = group_size
+    if self.trunc_len % self.group_size != 0:
+      raise ValueError("trunc_len must be divisible by group_size")
 
     # Load the character mapping
     with open(char_map_file, "r") as f:
       self.tokens = list(f.read())
     self.VOCAB_SIZE = len(self.tokens)
     print("Vocab size:", self.VOCAB_SIZE)
-    self.tokens.extend([self.OOV, self.START, self.END, self.PAD])
+    if special_tokens_at_end:
+      self.tokens.extend([self.OOV, self.START, self.END, self.PAD])
+    else:
+      self.tokens = [self.START, self.END, self.PAD, self.OOV] + self.tokens
     self.token_to_idx = {c: i for i, c in enumerate(self.tokens)}
     print("Character mapping loaded.")
 
   @staticmethod
   def from_config(config: DatasetConfig) -> Self:
     return FullExcerptDataset(
-      batch_size=config.batch_size, char_map_file=config.char_map_file, trunc_len=config.trunc_len
+      batch_size=config.batch_size,
+      char_map_file=config.char_map_file,
+      trunc_len=config.trunc_len,
+      group_size=config.group_size,
+      special_tokens_at_end=config.special_tokens_at_end,
     )
 
   @property
@@ -104,6 +126,10 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     if max_len > trunc_len:
       for i in range(len(batch)):
         batch[i] = batch[i][:trunc_len]
+    elif max_len % self.group_size != 0:
+      # truncate to multiple of group_size
+      for i in range(len(batch)):
+        batch[i] = batch[i][: -(max_len % self.group_size)]
 
     return torch.tensor(batch, dtype=torch.long)
 
@@ -121,7 +147,7 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     records = [list(next(self.ds)["text"]) for _ in range(self.batch_size)]
     batch = self.strings_to_batch(records, trunc_len=self.trunc_len)
 
-    inputs, labels = input_label_split(batch)
+    inputs, labels = input_label_split(batch, group_size=self.group_size)
     return DictionaryBatch({"inputs": inputs, "labels": labels})
 
   def tokens_to_string(self, tokens: torch.Tensor) -> str:
