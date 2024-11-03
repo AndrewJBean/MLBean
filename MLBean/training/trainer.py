@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Tuple, Dict, Optional
 import datetime
 import torch
@@ -8,6 +9,7 @@ from MLBean.configs.config_base import BaseConfig
 
 
 LABEL_KEY = "labels"
+METRICS_JSON_LINES = "metrics.jsonl"
 
 
 class CheckpointingConfig(BaseConfig):
@@ -124,6 +126,14 @@ class Trainer:
     ]
     joiner = ", " if len(eval_print_components) < 4 else "\n  "
     print(joiner.join(eval_print_components))
+    metrics = {
+      "step": step,
+      "steps_per_sec": steps_per_sec,
+      **{name: value.item() for name, value in metrics.items()},
+    }
+    metrics_jsonl_path = os.path.join(self.checkpoint_dir, METRICS_JSON_LINES)
+    with open(metrics_jsonl_path, "a") as f:
+      f.write(json.dumps(metrics) + "\n")
 
   def maybe_save_checkpoint(self, step: int) -> datetime.timedelta:
     if self.config.checkpointing is None or step % self.config.checkpointing.interval != 0:

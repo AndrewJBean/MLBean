@@ -28,14 +28,6 @@ class RotaryPositionalEncodingConfig(BaseConfig):
   base_freq: float
 
 
-class IdentityPositionalEncodingConfig(BaseConfig):
-  """
-  Config for the identity positional encoding.
-  """
-
-  encoding: str = "identity"
-
-
 class PositionalEncodingConfig(UnionLikeConfig):
   """
   Config for the positional encoding.
@@ -43,7 +35,7 @@ class PositionalEncodingConfig(UnionLikeConfig):
 
   sinusoidal: Optional[SinusoidalPositionalEncodingConfig] = None
   rotary: Optional[RotaryPositionalEncodingConfig] = None
-  identity: Optional[IdentityPositionalEncodingConfig] = None
+  identity: bool = False
 
 
 class SinusoidalPositionalEncoding(torch.nn.Module):
@@ -84,7 +76,7 @@ class IdentityPositionalEncoding(torch.nn.Module):
   Identity positional encoding.
   """
 
-  def __init__(self, config: IdentityPositionalEncodingConfig):
+  def __init__(self):
     super().__init__()
 
   def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -98,12 +90,12 @@ class PositionalEncoding(torch.nn.Module):
 
   def __init__(self, config: PositionalEncodingConfig):
     super().__init__()
-    if config.sinusoidal is not None:
+    if config.sinusoidal:
       self.pos_enc = SinusoidalPositionalEncoding(config.sinusoidal)
-    elif config.rotary is not None:
+    elif config.rotary:
       raise NotImplementedError
-    elif config.identity is not None:
-      self.pos_enc = IdentityPositionalEncoding(config.identity)
+    elif config.identity:
+      self.pos_enc = IdentityPositionalEncoding()
     else:
       raise ValueError("Unknown positional encoding config")
 

@@ -10,8 +10,8 @@ from MLBean.training.metrics import TopKAccuracy, Loss
 from MLBean.training.optimizer import build_optimizer
 from MLBean.training.trainer import Trainer
 
-from MLBean.projects.autoregressive_transformer.setup_train_dir import get_all_config
-from MLBean.projects.autoregressive_transformer.model import build_model_and_loss
+from MLBean.projects.conv_pooled.setup_train_dir import get_all_config
+from MLBean.projects.conv_pooled.model import build_model_and_loss
 
 
 FLAGS = flags.FLAGS
@@ -32,6 +32,7 @@ def main(argv):
 
   dataset = FullExcerptDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)
+  print(f"Model size: {sum(p.numel() for p in model_and_loss.model.model.parameters()):,}")
   optimizer = build_optimizer(params=model_and_loss.parameters(), config=all_config.optimizer)
   metrics = dict(
     loss=Loss(),
@@ -56,5 +57,5 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
   setup_flags()
-  signal.signal(signal.SIGINT, signal_handler)
+  # signal.signal(signal.SIGINT, signal_handler)
   app.run(main)

@@ -3,6 +3,7 @@ from MLBean.data.dataset import FullExcerptDataset
 from MLBean.modules.model_and_loss import ModelAndLoss
 from MLBean.modules.transformer_modules import TransformerWrapper
 
+
 def build_model_and_loss(config: AllConfig, dataset: FullExcerptDataset) -> ModelAndLoss:
   return ModelAndLoss(
     model=TransformerWrapper(
