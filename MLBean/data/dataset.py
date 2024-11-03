@@ -7,6 +7,13 @@ import torch
 from datasets import load_dataset
 
 from MLBean.data.batch_base import DictionaryBatch
+from MLBean.configs.config_base import BaseConfig
+
+
+class DatasetConfig(BaseConfig):
+  batch_size: int
+  trunc_len: int
+  char_map_file: Optional[str] = None
 
 
 # use ~/huggingface_cache for caching
@@ -44,6 +51,12 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     self.tokens.extend([self.OOV, self.START, self.END, self.PAD])
     self.token_to_idx = {c: i for i, c in enumerate(self.tokens)}
     print("Character mapping loaded.")
+
+  @staticmethod
+  def from_config(config: DatasetConfig) -> Self:
+    return FullExcerptDataset(
+      batch_size=config.batch_size, char_map_file=config.char_map_file, trunc_len=config.trunc_len
+    )
 
   @property
   def vocab_size(self) -> int:
