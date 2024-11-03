@@ -12,7 +12,8 @@ LABEL_KEY = "labels"
 
 class CheckpointingConfig(BaseConfig):
   interval: int
-  directory: str
+  # if None, use current directory
+  directory: Optional[str] = None
 
 
 class EvalConfig(BaseConfig):
@@ -55,6 +56,11 @@ class Trainer:
     self.model_and_loss = model_and_loss
     self.optimizer = optimizer
     self.device = device
+    self.checkpoint_dir = None
+    if self.config.checkpointing is not None:
+      self.checkpoint_dir = self.config.checkpointing.directory
+    if self.checkpoint_dir is None:
+      self.checkpoint_dir = os.getcwd()
     if self.device is not None:
       print(f"Using device: {self.device}")
       for metric in self.metrics.values():
@@ -123,7 +129,7 @@ class Trainer:
     if self.config.checkpointing is None or step % self.config.checkpointing.interval != 0:
       return
 
-    dest = os.path.join(self.config.checkpointing.directory, f"checkpoint_{step:010d}.pt")
+    dest = os.path.join(self.checkpoint_dir, f"checkpoint_{step:010d}.pt")
     print(f"Saving checkpoint to {dest} ...... ", end="")
     torch.save(self.model_and_loss.state_dict(), dest)
     print("done")
@@ -134,11 +140,11 @@ class Trainer:
     """
     if self.config.checkpointing is None:
       return 0
-    os.makedirs(self.config.checkpointing.directory, exist_ok=True)
-    checkpoint_dir = self.config.checkpointing.directory
-    checkpoint_files = [f for f in os.listdir(checkpoint_dir) if f.startswith("checkpoint_")]
+    os.makedirs(self.checkpoint_dir, exist_ok=True)
+    checkpoint_files = [f for f in os.listdir(self.checkpoint_dir) if f.startswith("checkpoint_")]
     checkpoints = {
-      int(f.split("_")[1].split(".")[0]): os.path.join(checkpoint_dir, f) for f in checkpoint_files
+      int(f.split("_")[1].split(".")[0]): os.path.join(self.checkpoint_dir, f)
+      for f in checkpoint_files
     }
     if not checkpoints:
       print("No checkpoints found")

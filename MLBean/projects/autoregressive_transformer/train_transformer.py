@@ -1,83 +1,45 @@
-from typing import Dict
-import platform
 import signal
 import sys
 import pathlib
+from absl import app, flags
+import os
 
-from MLBean.modules.transformer_modules import (
-  AutoregressiveTransformerConfig,
-  TransformerWrapper,
-  SinusoidalPositionalEncodingConfig,
-  PositionalEncodingConfig,
-  MultiHeadAttentionConfig,
-  MLPConfig,
-  EncoderBlockConfig,
-)
-from MLBean.training.metrics import TopKAccuracy, Loss
-from MLBean.modules.model_and_loss import ModelAndLoss
-from MLBean.training.trainer import Trainer, TrainerConfig, CheckpointingConfig, EvalConfig
 from MLBean.data.dataset import FullExcerptDataset
+from MLBean.environment.devices import get_device
+from MLBean.training.metrics import TopKAccuracy, Loss
+from MLBean.training.optimizer import build_optimizer
+from MLBean.training.trainer import Trainer
 
-import torch
+from MLBean.projects.autoregressive_transformer.setup_train_dir import get_all_config
+from MLBean.projects.autoregressive_transformer.model import build_model_and_loss
 
 
-def main():
-  emb_dims = 1024
-  num_layers = 16
-  num_heads = 16
-  chkpt_dir = (
-    pathlib.Path.home()
-    / "model_checkpoints"
-    / f"transformer_checkpoints_{emb_dims}_{num_layers}_{num_heads}"
+def setup_flags():
+  flags.DEFINE_string("jobdir", None, "The directory to load checkpoints from")
+  flags.mark_flag_as_required("jobdir")
+
+
+FLAGS = flags.FLAGS
+
+
+def main(argv):
+  device = get_device()
+  chkpt_dir = pathlib.Path(FLAGS.jobdir)
+  chkpt_dir.mkdir(parents=True, exist_ok=True)
+  os.chdir(chkpt_dir)
+
+  all_config = get_all_config(chkpt_dir)
+
+  dataset = FullExcerptDataset.from_config(all_config.dataset_train)
+  model_and_loss = build_model_and_loss(all_config, dataset)
+  optimizer = build_optimizer(params=model_and_loss.parameters(), config=all_config.optimizer)
+  metrics = dict(
+    loss=Loss(),
+    **{f"accuracy(k={k})": TopKAccuracy(k=k) for k in [1, 2, 3]},
   )
 
-  device = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cuda")
-
-  dataset = FullExcerptDataset(batch_size=4, trunc_len=512)
-
-  # if the config exists in chkpt_dir / config.json, load it
-  # otherwise, create a new one
-  # TODO: this could include all configuration, including dataset and training
-  if (chkpt_dir / "config.json").exists():
-    config = AutoregressiveTransformerConfig.json_load(str(chkpt_dir / "config.json"))
-    print("Loaded config from", chkpt_dir / "config.json")
-  else:
-    config = AutoregressiveTransformerConfig(
-      embedding_dims=emb_dims,
-      positional_encoding=PositionalEncodingConfig(
-        sinusoidal=SinusoidalPositionalEncodingConfig(
-          relative_freq_spacing=1.2,
-          base_freq=1.0,
-        ),
-      ),
-      encoder_block=EncoderBlockConfig(
-        multi_head_attention=MultiHeadAttentionConfig(num_heads=num_heads),
-        mlp=MLPConfig(layer_dims=[emb_dims, emb_dims]),
-      ),
-      num_layers=num_layers,
-    )
-    config.json_dump(str(chkpt_dir / "config.json"))
-    print("Saved config to", chkpt_dir / "config.json")
-
-  model = TransformerWrapper(
-    config=config, pad_token=dataset.pad_token, vocab_size=dataset.vocab_size
-  )
-
-  model_and_loss = ModelAndLoss(model=model)
-  optimizer = torch.optim.Adam(model_and_loss.parameters(), lr=0.00005)
-  metrics = {"loss": Loss()}
-  metrics.update({f"accuracy(k={k})": TopKAccuracy(k=k) for k in [1, 2, 3]})
-
-  trainer_config = TrainerConfig(
-    num_steps=100000,
-    log_interval=100,
-    eval=EvalConfig(interval=500, steps=100),
-    checkpointing=CheckpointingConfig(interval=1000, directory=str(chkpt_dir))
-    if platform.system() == "Darwin"
-    else None,
-  )
   trainer = Trainer(
-    config=trainer_config,
+    config=all_config.training,
     model_and_loss=model_and_loss,
     optimizer=optimizer,
     metrics=metrics,
@@ -93,5 +55,6 @@ def signal_handler(sig, frame):
 
 
 if __name__ == "__main__":
+  setup_flags()
   signal.signal(signal.SIGINT, signal_handler)
-  main()
+  app.run(main)

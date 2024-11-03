@@ -4,17 +4,19 @@ import pathlib
 
 from absl import app, flags
 
-from MLBean.modules.transformer_modules import AutoregressiveTransformerConfig
-from MLBean.modules.model_and_loss import ModelAndLoss
 from MLBean.data.dataset import FullExcerptDataset
-from MLBean.modules.transformer_modules import TransformerWrapper
 from MLBean.training.checkpointing import get_latest_checkpoint
+
+from MLBean.projects.autoregressive_transformer.setup_train_dir import get_all_config
+from MLBean.projects.autoregressive_transformer.model import build_model_and_loss
 
 import torch
 
 
-flags.DEFINE_integer("step", None, "The checkpoint step number to load")
-flags.DEFINE_string("dir", None, "The directory to load checkpoints from")
+def setup_flags():
+  flags.DEFINE_integer("step", None, "The checkpoint step number to load")
+  flags.DEFINE_string("dir", None, "The directory to load checkpoints from")
+  flags.mark_flag_as_required("dir")
 
 
 def main(argv):
@@ -24,20 +26,17 @@ def main(argv):
 
   dataset = FullExcerptDataset()
 
-  if not (chkpt_dir / "config.json").exists():
+  if not (chkpt_dir / "config.json").exists() and not (chkpt_dir / "all_config.json").exists():
     raise ValueError(f"Config file not found in {chkpt_dir}")
 
-  config = AutoregressiveTransformerConfig.json_load(str(chkpt_dir / "config.json"))
-  model = TransformerWrapper(
-    config=config, pad_token=dataset.pad_token, vocab_size=dataset.vocab_size
-  )
+  all_config = get_all_config(chkpt_dir)
 
-  model_and_loss = ModelAndLoss(model=model)
+  model_and_loss = build_model_and_loss(all_config, dataset)
   checkpoint_path = get_latest_checkpoint(chkpt_dir, step=flags.FLAGS.step)
   print(f"Loading checkpoint from {checkpoint_path}")
   model_and_loss.load_state_dict(torch.load(checkpoint_path, weights_only=True))
   model = model_and_loss.model.model
-  print(f"Model size: {sum(p.numel() for p in model.parameters())}")
+  print(f"Model size: {sum(p.numel() for p in model.parameters()):,}")
 
   # get a prompt from the user
   prompt = input("Enter a prompt: ")
@@ -76,5 +75,6 @@ def signal_handler(sig, frame):
 
 
 if __name__ == "__main__":
+  setup_flags()
   signal.signal(signal.SIGINT, signal_handler)
   app.run(main)

@@ -6,6 +6,7 @@ except ImportError:
   from typing_extensions import Self
 import zipfile
 import os
+import pathlib
 
 import pydantic
 
@@ -20,11 +21,13 @@ class BaseConfig(pydantic.BaseModel):
   def json_dumps(self: Self, *, exclude_none=True, indent=2, **kwargs) -> str:
     return self.model_dump_json(exclude_none=exclude_none, indent=indent, **kwargs)
 
-  def json_dump_zip(self: Self, path: str, **kwargs) -> None:
+  def json_dump_zip(self: Self, path: str | pathlib.Path, **kwargs) -> None:
+    path = str(path)
     with zipfile.ZipFile(path, "w") as zf:
       zf.writestr("config.json", self.json_dumps(**kwargs))
 
-  def json_dump(self: Self, path: str, **kwargs) -> None:
+  def json_dump(self: Self, path: str | pathlib.Path, **kwargs) -> None:
+    path = str(path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if path.endswith(".zip"):
       self.json_dump_zip(path, **kwargs)
@@ -37,7 +40,8 @@ class BaseConfig(pydantic.BaseModel):
     return cls.model_validate_json(s, strict=True, **kwargs)
 
   @classmethod
-  def json_load_zip(cls, path: str, **kwargs) -> Self:
+  def json_load_zip(cls, path: str | pathlib.Path, **kwargs) -> Self:
+    path = str(path)
     with zipfile.ZipFile(path, "r") as zf:
       files_in_zip = zf.namelist()
       json_files = [f for f in files_in_zip if f.endswith(".json")]
@@ -47,7 +51,8 @@ class BaseConfig(pydantic.BaseModel):
         return cls.json_loads(f.read().decode(), **kwargs)
 
   @classmethod
-  def json_load(cls, path: str, **kwargs) -> Self:
+  def json_load(cls, path: str | pathlib.Path, **kwargs) -> Self:
+    path = str(path)
     if path.endswith(".zip"):
       return cls.json_load_zip(path, **kwargs)
     else:
