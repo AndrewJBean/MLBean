@@ -54,6 +54,8 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     self.batch_size = batch_size
     self.ds = None
     self.trunc_len = trunc_len
+    if group_size is None:
+      group_size = 1
     self.group_size = group_size
     if self.trunc_len % self.group_size != 0:
       raise ValueError("trunc_len must be divisible by group_size")
