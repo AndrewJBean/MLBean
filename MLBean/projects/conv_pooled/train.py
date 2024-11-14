@@ -10,7 +10,7 @@ from MLBean.training.metrics import TopKAccuracy, Loss
 from MLBean.training.optimizer import build_optimizer
 from MLBean.training.trainer import Trainer
 
-from MLBean.projects.conv_pooled.setup_train_dir import get_all_config
+from MLBean.projects.conv_pooled.all_config import get_all_config
 from MLBean.projects.conv_pooled.model import build_model_and_loss
 
 

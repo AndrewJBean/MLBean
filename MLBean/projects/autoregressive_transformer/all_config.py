@@ -1,5 +1,6 @@
 from typing import Optional
 import platform
+import pathlib
 
 from MLBean.configs.config_base import BaseConfig
 from MLBean.data.dataset import DatasetConfig
@@ -48,3 +49,21 @@ def get_basic_all_config() -> AllConfig:
     optimizer=OptimizerConfig(adamw=AdamWConfig(lr=0.00005)),
     dataset_train=DatasetConfig(batch_size=4, trunc_len=512),
   )
+
+
+def get_all_config(chkpt_dir: pathlib.Path) -> AllConfig:
+  all_config = get_basic_all_config()
+  if (chkpt_dir / "all_config.json").exists():
+    all_config = AllConfig.json_load(chkpt_dir / "all_config.json")
+    print(f"succesfully loaded config from {chkpt_dir / 'all_config.json'}")
+    return all_config
+  elif (chkpt_dir / "config.json").exists():
+    all_config.model = AutoregressiveTransformerConfig.json_load(chkpt_dir / "config.json")
+    all_config.json_dump(chkpt_dir / "all_config.json")
+    print("Loaded model config from", chkpt_dir / "config.json")
+    print(f"Saved config to {chkpt_dir / 'all_config.json'}")
+    return all_config
+  else:
+    all_config.json_dump(chkpt_dir / "all_config.json")
+    print(f"Saved config to {chkpt_dir / 'all_config.json'}")
+    return all_config

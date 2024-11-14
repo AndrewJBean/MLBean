@@ -7,22 +7,25 @@ from absl import app, flags
 from MLBean.data.dataset import FullExcerptDataset
 from MLBean.training.checkpointing import get_latest_checkpoint
 
-from MLBean.projects.conv_pooled.setup_train_dir import get_all_config
+from MLBean.projects.conv_pooled.all_config import get_all_config
 from MLBean.projects.conv_pooled.model import build_model_and_loss
 
 import torch
+
+FLAGS = flags.FLAGS
 
 
 def setup_flags():
   flags.DEFINE_integer("step", None, "The checkpoint step number to load")
   flags.DEFINE_string("dir", None, "The directory to load checkpoints from")
+  flags.DEFINE_integer("multi", 1, "Number of samples to generate")
   flags.mark_flag_as_required("dir")
 
 
 def main(argv):
-  if flags.FLAGS.dir is None:
+  if FLAGS.dir is None:
     raise ValueError("Please specify a directory to load checkpoints from")
-  chkpt_dir = pathlib.Path(flags.FLAGS.dir)
+  chkpt_dir = pathlib.Path(FLAGS.dir)
 
   if not (chkpt_dir / "all_config.json").exists():
     raise ValueError(f"Config file not found in {chkpt_dir}")
@@ -31,7 +34,7 @@ def main(argv):
 
   dataset = FullExcerptDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)
-  checkpoint_path = get_latest_checkpoint(chkpt_dir, step=flags.FLAGS.step)
+  checkpoint_path = get_latest_checkpoint(chkpt_dir, step=FLAGS.step)
   print(f"Loading checkpoint from {checkpoint_path}")
   model_and_loss.load_state_dict(torch.load(checkpoint_path, weights_only=True))
   model = model_and_loss.model.model
@@ -45,10 +48,10 @@ def main(argv):
   print(prompt, end="")
 
   group_size = all_config.dataset_train.group_size
-  max_context_length = 10240
-  # max_context_length = 200
-  chars_per_prediction = group_size
-  # chars_per_prediction = 1
+  max_context_length = 1024
+  if FLAGS.multi < 1 or FLAGS.multi > group_size:
+    raise ValueError("multi must be between 1 and group_size")
+  chars_per_prediction = FLAGS.multi
   with torch.no_grad():
     model.eval()
     while True:

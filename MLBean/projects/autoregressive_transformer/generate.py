@@ -7,7 +7,7 @@ from absl import app, flags
 from MLBean.data.dataset import FullExcerptDataset
 from MLBean.training.checkpointing import get_latest_checkpoint
 
-from MLBean.projects.autoregressive_transformer.setup_train_dir import get_all_config
+from MLBean.projects.autoregressive_transformer.all_config import get_all_config
 from MLBean.projects.autoregressive_transformer.model import build_model_and_loss
 
 import torch
