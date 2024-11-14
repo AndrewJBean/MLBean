@@ -180,6 +180,124 @@ class MultiHeadAttentionKarpathy(torch.nn.Module):
     return y, None
 
 
+class RotaryAttentionConfig(BaseConfig):
+  """
+  Config for the rotary attention.
+
+  project keys, queries to kdim
+  project values to vdim
+  rotary encode with geometric sequence of frequencies
+  scaled dot product attention
+  concat heads and project to embedding_dims
+  """
+
+  num_heads: int
+  dropout: float = 0.0
+  kdim: Optional[int] = None
+  vdim: Optional[int] = None
+  min_theta: float
+  max_theta: float
+
+
+def generate_geometric_sequence(lo, hi, num_values):
+  powers = [i / (num_values - 1) for i in range(num_values)]
+  sequence = [lo * (hi / lo) ** p for p in powers]
+  return sequence
+
+
+def calc_sin_cos(x: torch.Tensor, min_theta, max_theta):
+  """
+  assumes x is a tensor of shape (..., num_tokens, embedding_dim)
+  """
+
+  t = x.size(-2)
+  d = x.size(-1)
+  assert d % 2 == 0
+  d = d // 2
+  thetas = generate_geometric_sequence(min_theta, max_theta, d)
+  thetas = torch.tensor(thetas, dtype=x.dtype, device=x.device, requires_grad=False)
+  pos = torch.arange(t, device=x.device, dtype=x.dtype, requires_grad=False).unsqueeze(1)
+  pos = pos / thetas
+  return pos.sin(), pos.cos()
+
+
+def rotary_encode(x: torch.Tensor, sin: torch.Tensor, cos: torch.Tensor):
+  d = x.size(-1)
+  d = d // 2
+  x_hi = x[..., :d]
+  x_lo = x[..., d:]
+  y_lo = x_lo * cos + x_hi * sin
+  y_hi = x_hi * cos - x_lo * sin
+  return torch.cat([y_lo, y_hi], axis=-1)
+
+
+class RotaryAttention(torch.nn.Module):
+  """
+  Rotary attention.
+  """
+
+  def __init__(self, config: RotaryAttentionConfig, dims: int):
+    super().__init__()
+    self.config = config
+    self.dims = dims
+    self.num_heads = config.num_heads
+
+    if config.kdim:
+      self.kdim = config.kdim
+    else:
+      assert self.dims % self.num_heads == 0
+      self.kdim = self.dims // self.num_heads
+
+    if config.vdim:
+      self.vdim = config.vdim
+    else:
+      assert self.dims % self.num_heads == 0
+      self.vdim = self.dims // self.num_heads
+
+    self.min_theta = config.min_theta
+    self.max_theta = config.max_theta
+
+    self.in_proj = torch.nn.Linear(dims, (2 * self.kdim + self.vdim) * self.num_heads)
+    self.out_proj = torch.nn.Linear(self.num_heads * self.vdim, dims)
+    self.attn_dropout = torch.nn.Dropout(config.dropout)
+    self.resid_dropout = torch.nn.Dropout(config.dropout)
+
+  def forward(self, x):
+    B, T, _ = x.size()  # batch size, sequence length, embedding dimensionality
+    proj = self.in_proj(x)
+    idx1, idx2 = self.kdim * self.num_heads, self.kdim * self.num_heads * 2
+    # (bsz, T, kdim * nheads)
+    q = proj[..., :idx1]
+    # (bsz, T, kdim * nheads)
+    k = proj[..., idx1:idx2]
+    # (bsz, T, vdim * nheads)
+    v = proj[..., idx2:]
+
+    q = q.view(B, T, self.num_heads, self.kdim).transpose(1, 2)  # (B, nh, T, kdim)
+    k = k.view(B, T, self.num_heads, self.kdim).transpose(1, 2)  # (B, nh, T, kdim)
+    v = v.view(B, T, self.num_heads, self.vdim).transpose(1, 2)  # (B, nh, T, vdim)
+
+    sin, cos = calc_sin_cos(q, self.min_theta, self.max_theta)
+    q = rotary_encode(q, sin, cos)
+    k = rotary_encode(k, sin, cos)
+
+    # (B, nh, T, kdim) x (B, nh, kdim, T) => (B, nh, T(q), T(k))
+    att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+    # mask out to -inf where key index is greater than query index
+    bias = torch.tril(torch.ones(T, T)).view(1, 1, T, T).to(att.device)
+    att = att.masked_fill(bias == 0, float("-inf"))
+    att = torch.nn.functional.softmax(att, dim=-1)
+    att = self.attn_dropout(att)
+    # (B, nh, T, T) x (B, nh, T, vdim) => (B, nh, T, vdim)
+    y = att @ v
+    # (B, nh, T, vdim) -> (B, T, nh, vdim) -> (B, T, nh * vdim)
+    y = y.transpose(1, 2).contiguous().view(B, T, -1)
+
+    # output projection
+    y = self.resid_dropout(self.out_proj(y))
+    return y
+
+
 class MLPConfig(BaseConfig):
   """
   Config for the multi-layer perceptron.
@@ -213,6 +331,46 @@ class MLP(torch.nn.Module):
     return self.mlp(x)
 
 
+class RotaryEncoderBlockConfig(BaseConfig):
+  """
+  Config for the rotary encoder block.
+  """
+
+  attention: RotaryAttentionConfig
+  mlp: MLPConfig
+
+
+class RotaryEncoderBlock(torch.nn.Module):
+  """
+  Encoder block with rotary attention.
+  """
+
+  def __init__(self, config: RotaryEncoderBlockConfig, dims: int):
+    super().__init__()
+    self.attention = RotaryAttention(config.attention, dims)
+    self.mlp = MLP(config.mlp, dims)
+
+  def forward(self, x: torch.Tensor) -> torch.Tensor:
+    """
+    x: (batch_size, num_tokens, dims)
+    """
+    # rotary attention
+    attn_output = self.attention(x)
+    # residual connection
+    x = x + attn_output
+    # layer normalization
+    x = torch.nn.functional.layer_norm(x, x.size()[1:])
+
+    # mlp
+    mlp_output = self.mlp(x)
+    # residual connection
+    x = x + mlp_output
+    # layer normalization
+    x = torch.nn.functional.layer_norm(x, x.size()[1:])
+
+    return x
+
+
 class EncoderBlockConfig(BaseConfig):
   """
   Config for the encoder block.
@@ -226,7 +384,14 @@ class EncoderBlock(torch.nn.Module):
   """
   Encoder block.
 
-  Input is (batch_size, num_tokens, dims),
+  Input is (batch_size, num_tokens, dims)
+
+  multi-head attention
+  residual connection
+  layer normalization
+  mlp
+  residual connection
+  layer normalization
   """
 
   def __init__(self, config: EncoderBlockConfig, dims: int):
@@ -323,6 +488,60 @@ class AutoregressiveTransformer(torch.nn.Module):
       x = encoder_block(x, key_padding_mask=key_padding_mask, is_causal=False, attn_mask=attn_mask)
     x = self.output_projection(x)
     return x
+
+
+class RotaryTransformerConfig(BaseConfig):
+  """
+  Config for the rotary autoregressive transformer encoder.
+
+  input embedding
+  rotary encoder blocks
+  output projection
+  softmax
+  """
+
+  embedding_dims: int
+  encoder_block: RotaryEncoderBlockConfig
+  num_layers: int
+
+
+class RotaryTransformer(torch.nn.Module):
+  """
+  Rotary autoregressive transformer decoder.
+  """
+
+  def __init__(self, config: RotaryTransformerConfig, vocab_size: int):
+    super().__init__()
+    self.embedding = torch.nn.Embedding(vocab_size, config.embedding_dims)
+    self.encoder_blocks = torch.nn.ModuleList(
+      [
+        RotaryEncoderBlock(config.encoder_block, config.embedding_dims)
+        for _ in range(config.num_layers)
+      ]
+    )
+    self.output_projection = torch.nn.Linear(config.embedding_dims, vocab_size)
+
+  def forward(self, x: torch.Tensor) -> torch.Tensor:
+    """
+    causal autoregressive transformer encoder.
+    x: (batch_size, num_tokens) of integers
+    output: (batch_size, num_tokens, vocab_size)
+    """
+    # (batch_size, num_tokens, embedding_dims)
+    x = self.embedding(x)
+    for encoder_block in self.encoder_blocks:
+      x = encoder_block(x)
+    x = self.output_projection(x)
+    return x
+
+
+class DictBatchWrapper(torch.nn.Module):
+  def __init__(self, *, model: torch.nn.Module):
+    super().__init__()
+    self.model = model
+
+  def forward(self, batch: DictionaryBatch) -> DictionaryBatch:
+    return DictionaryBatch(logits=self.model(batch["inputs"]))
 
 
 class TransformerWrapper(torch.nn.Module):
