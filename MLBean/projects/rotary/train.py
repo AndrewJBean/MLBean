@@ -25,7 +25,7 @@ def setup_flags():
 def main(argv):
   device = get_device()
   chkpt_dir = pathlib.Path(FLAGS.dir)
-  all_config = get_all_config(chkpt_dir)
+  all_config = get_all_config(chkpt_dir, maybe_create=True)
   os.chdir(chkpt_dir)
 
   dataset = FullExcerptDataset.from_config(all_config.dataset_train)
