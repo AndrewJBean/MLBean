@@ -102,8 +102,20 @@ class Trainer:
       if step % self.log_interval == 0:
         steps_per_sec = train_steps_count / train_time_accum.total_seconds()
         avg_loss = loss_accum / loss_count
-        print(f"train: Step={step}, Steps/s={steps_per_sec:.2f}, Loss={avg_loss}")
-
+        ts = datetime.datetime.now()
+        metrics = {
+          "step": step,
+          "steps_per_sec": steps_per_sec,
+          "ts": ts.timestamp(),
+          "loss": avg_loss,
+        }
+        self.log_metrics({"split": "train", "metrics": metrics})
+        print(
+          f"train: Step={step}, "
+          f"ts={ts.isoformat()}, "
+          f"Steps/s={steps_per_sec:.2f}, "
+          f"Loss={avg_loss}"
+        )
         train_time_accum = datetime.timedelta(0)
         train_steps_count = 0
         loss_accum = 0.0
@@ -129,8 +141,12 @@ class Trainer:
     metrics = {
       "step": step,
       "steps_per_sec": steps_per_sec,
+      "ts": datetime.datetime.now().timestamp(),
       **{name: value.item() for name, value in metrics.items()},
     }
+    self.log_metrics({"split": "eval", "metrics": metrics})
+
+  def log_metrics(self, metrics):
     metrics_jsonl_path = os.path.join(self.checkpoint_dir, METRICS_JSON_LINES)
     with open(metrics_jsonl_path, "a") as f:
       f.write(json.dumps(metrics) + "\n")
