@@ -456,7 +456,7 @@ class AutoregressiveTransformer(torch.nn.Module):
   """
 
   def __init__(
-    self, config: AutoregressiveTransformerConfig, pad_token: Optional[int], vocab_size: int
+    self, config: AutoregressiveTransformerConfig, vocab_size: int, pad_token: Optional[int] = None
   ):
     super().__init__()
     self.pad_token = pad_token
