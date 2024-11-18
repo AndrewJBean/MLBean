@@ -4,7 +4,7 @@ import pathlib
 from absl import app, flags
 import os
 
-from MLBean.data.dataset import FullExcerptDataset
+from MLBean.data.dataset import TextDataset
 from MLBean.environment.devices import get_device
 from MLBean.training.metrics import TopKAccuracy, Loss
 from MLBean.training.optimizer import build_optimizer
@@ -28,9 +28,9 @@ def main(argv):
   all_config = get_all_config(chkpt_dir, maybe_create=True)
   os.chdir(chkpt_dir)
 
-  dataset = FullExcerptDataset.from_config(all_config.dataset_train)
+  dataset = TextDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)
-  print(f"Model size: {sum(p.numel() for p in model_and_loss.model.model.parameters()):,}")
+  print(f"Model size: {sum(p.numel() for p in model_and_loss.model.parameters()):,}")
   optimizer = build_optimizer(params=model_and_loss.parameters(), config=all_config.optimizer)
   metrics = dict(
     loss=Loss(),
@@ -55,5 +55,5 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
   setup_flags()
-  # signal.signal(signal.SIGINT, signal_handler)
+  signal.signal(signal.SIGINT, signal_handler)
   app.run(main)

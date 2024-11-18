@@ -4,7 +4,7 @@ import pathlib
 
 from absl import app, flags
 
-from MLBean.data.dataset import FullExcerptDataset
+from MLBean.data.dataset import TextDataset
 from MLBean.training.checkpointing import get_latest_checkpoint
 
 from MLBean.projects.rotary.all_config import get_all_config
@@ -27,12 +27,12 @@ def main(argv):
   chkpt_dir = pathlib.Path(FLAGS.dir)
   all_config = get_all_config(chkpt_dir, maybe_create=False)
 
-  dataset = FullExcerptDataset.from_config(all_config.dataset_train)
+  dataset = TextDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)
   checkpoint_path = get_latest_checkpoint(chkpt_dir, step=FLAGS.step)
   print(f"Loading checkpoint from {checkpoint_path}")
   model_and_loss.load_state_dict(torch.load(checkpoint_path, weights_only=True))
-  model = model_and_loss.model.model
+  model = model_and_loss.model
   print(f"Model size: {sum(p.numel() for p in model.parameters()):,}")
 
   # get a prompt from the user
@@ -61,7 +61,7 @@ def main(argv):
       tokens.append(next_token)
       if len(tokens) > max_context_length:
         tokens = tokens[-max_context_length:]
-      next_char = dataset.tokens_to_string(next_token)[0]
+      next_char = dataset.tokens_to_strings(next_token)[0]
       print(next_char, end="", flush=True)
 
 
