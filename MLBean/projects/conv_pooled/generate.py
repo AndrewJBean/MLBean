@@ -4,7 +4,7 @@ import pathlib
 
 from absl import app, flags
 
-from MLBean.data.dataset import FullExcerptDataset
+from MLBean.data.dataset import TextPredictionDataset
 from MLBean.training.checkpointing import get_latest_checkpoint
 
 from MLBean.projects.conv_pooled.all_config import get_all_config
@@ -32,7 +32,7 @@ def main(argv):
 
   all_config = get_all_config(chkpt_dir)
 
-  dataset = FullExcerptDataset.from_config(all_config.dataset_train)
+  dataset = TextPredictionDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)
   checkpoint_path = get_latest_checkpoint(chkpt_dir, step=FLAGS.step)
   print(f"Loading checkpoint from {checkpoint_path}")
@@ -71,21 +71,8 @@ def main(argv):
         tokens.append(next_token)
         if len(tokens) > max_context_length:
           tokens = tokens[-max_context_length:]
-        next_char = dataset.tokens_to_string(next_token)[0]
+        next_char = dataset.tokens_to_strings(next_token)[0]
         print(next_char, end="", flush=True)
-      # next_token_logits = all_logits[:, -group_size, :]
-
-      # temperature = 0.8
-      # next_token = torch.multinomial(
-      #   torch.softmax(next_token_logits / temperature, dim=-1), num_samples=1
-      # )
-      # if next_token in dataset.non_text_tokens:
-      #   break
-      # tokens.append(next_token)
-      # if len(tokens) > max_context_length:
-      #   tokens = tokens[-max_context_length:]
-      # next_char = dataset.tokens_to_string(next_token)[0]
-      # print(next_char, end="", flush=True)
 
 
 # handle keyboard interrupt

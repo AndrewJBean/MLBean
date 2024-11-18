@@ -4,7 +4,7 @@ import pathlib
 from absl import app, flags
 import os
 
-from MLBean.data.dataset import FullExcerptDataset
+from MLBean.data.dataset import TextPredictionDataset
 from MLBean.environment.devices import get_device
 from MLBean.training.metrics import TopKAccuracy, Loss
 from MLBean.training.optimizer import build_optimizer
@@ -30,7 +30,7 @@ def main(argv):
 
   all_config = get_all_config(chkpt_dir)
 
-  dataset = FullExcerptDataset.from_config(all_config.dataset_train)
+  dataset = TextPredictionDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)
   optimizer = build_optimizer(params=model_and_loss.parameters(), config=all_config.optimizer)
   metrics = dict(

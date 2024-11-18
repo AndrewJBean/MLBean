@@ -33,7 +33,7 @@ def input_label_split(
   return x[:, :-group_size], x[:, group_size:]
 
 
-class FullExcerptDataset(torch.utils.data.IterableDataset):
+class TextDataset(torch.utils.data.IterableDataset):
   OOV = "<OOV>"
   START = "<START>"
   END = "<END>"
@@ -45,7 +45,6 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     batch_size: int = 1,
     char_map_file: Optional[str] = None,
     trunc_len: int = 500,
-    group_size: Optional[int] = None,
     special_tokens_at_end: Optional[bool] = True,
   ):
     if char_map_file is None:
@@ -54,11 +53,6 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     self.batch_size = batch_size
     self.ds = None
     self.trunc_len = trunc_len
-    if group_size is None:
-      group_size = 1
-    self.group_size = group_size
-    if self.trunc_len % self.group_size != 0:
-      raise ValueError("trunc_len must be divisible by group_size")
 
     # Load the character mapping
     with open(char_map_file, "r") as f:
@@ -74,11 +68,10 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
 
   @staticmethod
   def from_config(config: DatasetConfig) -> Self:
-    return FullExcerptDataset(
+    return TextDataset(
       batch_size=config.batch_size,
       char_map_file=config.char_map_file,
       trunc_len=config.trunc_len,
-      group_size=config.group_size,
       special_tokens_at_end=config.special_tokens_at_end,
     )
 
@@ -128,14 +121,10 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     if max_len > trunc_len:
       for i in range(len(batch)):
         batch[i] = batch[i][:trunc_len]
-    elif max_len % self.group_size != 0:
-      # truncate to multiple of group_size
-      for i in range(len(batch)):
-        batch[i] = batch[i][: -(max_len % self.group_size)]
 
     return torch.tensor(batch, dtype=torch.long)
 
-  def __next__(self) -> DictionaryBatch:
+  def __next__(self) -> torch.Tensor:
     if self.ds is None:
       self.ds = load_dataset(
         "HuggingFaceFW/fineweb-edu",
@@ -147,12 +136,9 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
       self.ds = iter(self.ds["train"])
 
     records = [list(next(self.ds)["text"]) for _ in range(self.batch_size)]
-    batch = self.strings_to_batch(records, trunc_len=self.trunc_len)
+    return self.strings_to_batch(records, trunc_len=self.trunc_len)
 
-    inputs, labels = input_label_split(batch, group_size=self.group_size)
-    return DictionaryBatch({"inputs": inputs, "labels": labels})
-
-  def tokens_to_string(self, tokens: torch.Tensor) -> str:
+  def tokens_to_strings(self, tokens: torch.Tensor) -> str:
     # assuming 2D batch tensor
     return [
       "".join([self.tokens[tok] for tok in row if tok not in self.non_text_tokens])
@@ -163,11 +149,56 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     return torch.utils.data.DataLoader(self, batch_size=None)
 
 
+class TextPredictionDataset(TextDataset):
+  def __init__(
+    self,
+    *,
+    batch_size: int = 1,
+    char_map_file: Optional[str] = None,
+    trunc_len: int = 500,
+    group_size: Optional[int] = None,
+    special_tokens_at_end: Optional[bool] = True,
+  ):
+    super().__init__(
+      batch_size=batch_size,
+      char_map_file=char_map_file,
+      trunc_len=trunc_len,
+      special_tokens_at_end=special_tokens_at_end,
+    )
+    if group_size is None:
+      group_size = 1
+    self.group_size = group_size
+    if self.trunc_len % self.group_size != 0:
+      raise ValueError("trunc_len must be divisible by group_size")
+
+  @staticmethod
+  def from_config(config: DatasetConfig) -> Self:
+    return TextPredictionDataset(
+      batch_size=config.batch_size,
+      char_map_file=config.char_map_file,
+      trunc_len=config.trunc_len,
+      group_size=config.group_size,
+      special_tokens_at_end=config.special_tokens_at_end,
+    )
+
+  def __next__(self) -> DictionaryBatch:
+    batch = super().__next__()
+    # truncate to multiple of group_size
+    batch = batch[:, : (batch.size(1) // self.group_size) * self.group_size]
+    inputs, labels = input_label_split(batch, group_size=self.group_size)
+    return DictionaryBatch({"inputs": inputs, "labels": labels})
+
+
 if __name__ == "__main__":
   this_file_directory = os.path.dirname(os.path.realpath(__file__))
   char_map_file = os.path.join(this_file_directory, "character_map.txt")
-  ds = FullExcerptDataset(batch_size=5, char_map_file=char_map_file)
+  ds = TextPredictionDataset(
+    batch_size=4,
+    char_map_file=char_map_file,
+    trunc_len=32,
+  )
   for i, batch in enumerate(ds):
-    pprint(ds.tokens_to_string(batch["inputs"]))
+    pprint(ds.tokens_to_strings(batch["inputs"]))
+    pprint(ds.tokens_to_strings(batch["labels"]))
     if i > 3:
       break

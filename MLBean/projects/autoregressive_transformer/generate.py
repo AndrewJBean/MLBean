@@ -4,7 +4,7 @@ import pathlib
 
 from absl import app, flags
 
-from MLBean.data.dataset import FullExcerptDataset
+from MLBean.data.dataset import TextPredictionDataset
 from MLBean.training.checkpointing import get_latest_checkpoint
 
 from MLBean.projects.autoregressive_transformer.all_config import get_all_config
@@ -24,7 +24,7 @@ def main(argv):
     raise ValueError("Please specify a directory to load checkpoints from")
   chkpt_dir = pathlib.Path(flags.FLAGS.dir)
 
-  dataset = FullExcerptDataset()
+  dataset = TextPredictionDataset()
 
   if not (chkpt_dir / "config.json").exists() and not (chkpt_dir / "all_config.json").exists():
     raise ValueError(f"Config file not found in {chkpt_dir}")
@@ -64,7 +64,7 @@ def main(argv):
       tokens.append(next_token)
       if len(tokens) > max_context_length:
         tokens = tokens[-max_context_length:]
-      next_char = dataset.tokens_to_string(next_token)[0]
+      next_char = dataset.tokens_to_strings(next_token)[0]
       print(next_char, end="", flush=True)
 
 
