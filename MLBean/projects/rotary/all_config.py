@@ -11,6 +11,7 @@ from MLBean.modules.transformer_modules import (
   RotaryEncoderBlockConfig,
   RotaryTransformerConfig,
 )
+from MLBean.modules.iter_transformer import IterTransformerConfig
 from MLBean.training.optimizer import OptimizerConfig, AdamWConfig
 from MLBean.training.trainer import TrainerConfig, CheckpointingConfig, EvalConfig
 
@@ -22,11 +23,13 @@ FLAGS = flags.FLAGS
 
 def setup_flags():
   flags.DEFINE_string("dir", None, "The directory to load checkpoints from")
+  flags.DEFINE_string("model", "rotary", "The model to use: rotary or iterated")
   flags.mark_flag_as_required("dir")
 
 
 class ModelConfig(UnionLikeConfig):
   rotary: Optional[RotaryTransformerConfig] = None
+  iterated: Optional[IterTransformerConfig] = None
 
 
 class AllConfig(BaseConfig):
@@ -37,7 +40,16 @@ class AllConfig(BaseConfig):
   dataset_eval: Optional[DatasetConfig] = None
 
 
-def get_basic_all_config() -> AllConfig:
+def get_basic_all_config(model: str = "rotary") -> AllConfig:
+  if model == "rotary":
+    return get_rotary_all_config()
+  elif model == "iterated":
+    return get_iterated_all_config()
+  else:
+    raise ValueError(f"Unknown model: {model}")
+
+
+def get_rotary_all_config() -> AllConfig:
   emb_dims = 1024
   num_heads = 16
   num_layers = 12
@@ -71,8 +83,50 @@ def get_basic_all_config() -> AllConfig:
   )
 
 
-def get_all_config(chkpt_dir: pathlib.Path, maybe_create: bool = False) -> AllConfig:
-  all_config = get_basic_all_config()
+def get_iterated_all_config() -> AllConfig:
+  emb_dims = 2048
+  num_heads = 16
+  input_layers = 3
+  iter_layers = 4
+  output_layers = 3
+  num_iters = 5
+  return AllConfig(
+    model=ModelConfig(
+      iterated=IterTransformerConfig(
+        embedding_dims=emb_dims,
+        encoder_block=RotaryEncoderBlockConfig(
+          attention=RotaryAttentionConfig(
+            num_heads=num_heads,
+            min_theta=1.0,
+            max_theta=10000.0,
+          ),
+          mlp=MLPConfig(layer_dims=[emb_dims, emb_dims]),
+        ),
+        input_layers=input_layers,
+        iter_layers=iter_layers,
+        output_layers=output_layers,
+        num_iters=num_iters,
+      )
+    ),
+    training=TrainerConfig(
+      num_steps=1_000_000,
+      log_interval=10,
+      eval=EvalConfig(interval=500, steps=100),
+      checkpointing=CheckpointingConfig(interval=1000) if platform.system() == "Darwin" else None,
+    ),
+    optimizer=OptimizerConfig(adamw=AdamWConfig(lr=0.00001)),
+    dataset_train=DatasetConfig(
+      batch_size=4,
+      trunc_len=512,
+      special_tokens_at_end=False,
+    ),
+  )
+
+
+def get_all_config(
+  chkpt_dir: pathlib.Path, maybe_create: bool = False, model: str = "rotary"
+) -> AllConfig:
+  all_config = get_basic_all_config(model)
   config_path = chkpt_dir / DEFAULT_CONFIG_FILE
   if (config_path).exists():
     all_config = AllConfig.json_load(config_path)
@@ -88,7 +142,7 @@ def get_all_config(chkpt_dir: pathlib.Path, maybe_create: bool = False) -> AllCo
 
 def main(argv):
   chkpt_dir = pathlib.Path(FLAGS.dir)
-  all_config = get_all_config(chkpt_dir, maybe_create=True)
+  _ = get_all_config(chkpt_dir, maybe_create=True, model=FLAGS.model)
 
 
 if __name__ == "__main__":

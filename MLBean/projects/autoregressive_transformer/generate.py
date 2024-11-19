@@ -35,7 +35,7 @@ def main(argv):
   checkpoint_path = get_latest_checkpoint(chkpt_dir, step=flags.FLAGS.step)
   print(f"Loading checkpoint from {checkpoint_path}")
   model_and_loss.load_state_dict(torch.load(checkpoint_path, weights_only=True))
-  model = model_and_loss.model.model
+  model = model_and_loss._model.model
   print(f"Model size: {sum(p.numel() for p in model.parameters()):,}")
 
   # get a prompt from the user

@@ -32,7 +32,7 @@ def main(argv):
 
   dataset = TextPredictionDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)
-  print(f"Model size: {sum(p.numel() for p in model_and_loss.model.model.parameters()):,}")
+  print(f"Model size: {sum(p.numel() for p in model_and_loss._model.model.parameters()):,}")
   optimizer = build_optimizer(params=model_and_loss.parameters(), config=all_config.optimizer)
   metrics = dict(
     loss=Loss(),
