@@ -7,7 +7,7 @@ from MLBean.data.dataset import TextDataset
 from MLBean.modules.model_and_loss import ModelAndOffsetLoss, ModelAndLoss
 from MLBean.modules.transformer_modules import RotaryTransformer, DictBatchWrapper
 
-from MLBean.projects.rotary.all_config import get_all_config
+from MLBean.projects.transformers.all_config import get_all_config
 
 import torch
 

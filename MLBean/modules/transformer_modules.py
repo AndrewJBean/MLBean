@@ -19,22 +19,12 @@ class SinusoidalPositionalEncodingConfig(BaseConfig):
   random_offset: bool = False
 
 
-class RotaryPositionalEncodingConfig(BaseConfig):
-  """
-  Config for the rotary positional encoding.
-  """
-
-  relative_freq_spacing: float
-  base_freq: float
-
-
 class PositionalEncodingConfig(UnionLikeConfig):
   """
   Config for the positional encoding.
   """
 
   sinusoidal: Optional[SinusoidalPositionalEncodingConfig] = None
-  rotary: Optional[RotaryPositionalEncodingConfig] = None
   identity: bool = False
 
 
@@ -92,8 +82,6 @@ class PositionalEncoding(torch.nn.Module):
     super().__init__()
     if config.sinusoidal:
       self.pos_enc = SinusoidalPositionalEncoding(config.sinusoidal)
-    elif config.rotary:
-      raise NotImplementedError
     elif config.identity:
       self.pos_enc = IdentityPositionalEncoding()
     else:
