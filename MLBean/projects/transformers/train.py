@@ -10,8 +10,8 @@ from MLBean.training.metrics import TopKAccuracy, Loss
 from MLBean.training.optimizer import build_optimizer
 from MLBean.training.trainer import Trainer
 
-from MLBean.projects.rotary.all_config import get_all_config
-from MLBean.projects.rotary.model import build_model_and_loss
+from MLBean.projects.transformers.all_config import get_all_config
+from MLBean.projects.transformers.model import build_model_and_loss
 
 
 FLAGS = flags.FLAGS

@@ -10,6 +10,12 @@ from MLBean.modules.transformer_modules import (
   RotaryAttentionConfig,
   RotaryEncoderBlockConfig,
   RotaryTransformerConfig,
+  AutoregressiveTransformerConfig,
+  SinusoidalPositionalEncodingConfig,
+  PositionalEncodingConfig,
+  MultiHeadAttentionConfig,
+  MLPConfig,
+  EncoderBlockConfig,
 )
 from MLBean.modules.iter_transformer import IterTransformerConfig
 from MLBean.training.optimizer import OptimizerConfig, AdamWConfig
@@ -30,6 +36,7 @@ def setup_flags():
 class ModelConfig(UnionLikeConfig):
   rotary: Optional[RotaryTransformerConfig] = None
   iterated: Optional[IterTransformerConfig] = None
+  basic: Optional[AutoregressiveTransformerConfig] = None
 
 
 class AllConfig(BaseConfig):
@@ -45,6 +52,8 @@ def get_basic_all_config(model: str = "rotary") -> AllConfig:
     return get_rotary_all_config()
   elif model == "iterated":
     return get_iterated_all_config()
+  elif model == "basic":
+    return get_basic_transformer_all_config()
   else:
     raise ValueError(f"Unknown model: {model}")
 
@@ -120,6 +129,38 @@ def get_iterated_all_config() -> AllConfig:
       trunc_len=512,
       special_tokens_at_end=False,
     ),
+  )
+
+
+def get_basic_transformer_all_config() -> AllConfig:
+  emb_dims = 1024
+  num_heads = 16
+  num_layers = 12
+  return AllConfig(
+    model=ModelConfig(
+      basic=AutoregressiveTransformerConfig(
+        embedding_dims=emb_dims,
+        positional_encoding=PositionalEncodingConfig(
+          sinusoidal=SinusoidalPositionalEncodingConfig(
+            relative_freq_spacing=1.2,
+            base_freq=1.0,
+          ),
+        ),
+        encoder_block=EncoderBlockConfig(
+          multi_head_attention=MultiHeadAttentionConfig(num_heads=num_heads),
+          mlp=MLPConfig(layer_dims=[emb_dims, emb_dims]),
+        ),
+        num_layers=num_layers,
+      ),
+    ),
+    training=TrainerConfig(
+      num_steps=100000,
+      log_interval=100,
+      eval=EvalConfig(interval=500, steps=100),
+      checkpointing=CheckpointingConfig(interval=1000) if platform.system() == "Darwin" else None,
+    ),
+    optimizer=OptimizerConfig(adamw=AdamWConfig(lr=0.00005)),
+    dataset_train=DatasetConfig(batch_size=4, trunc_len=512),
   )
 
 
