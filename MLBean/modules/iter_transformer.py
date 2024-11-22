@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 import os
 import math
 
@@ -62,7 +62,7 @@ class IterTransformer(torch.nn.Module):
     )
     self.output_projection = torch.nn.Linear(config.embedding_dims, vocab_size)
 
-  def forward(self, x: torch.Tensor) -> torch.Tensor:
+  def forward(self, x: torch.Tensor) -> torch.Tensor | List[torch.Tensor]:
     """
     Forward pass of the model.
 
@@ -74,11 +74,15 @@ class IterTransformer(torch.nn.Module):
     """
     x = self.embedding(x)  # => (batch_size, num_tokens, embedding_dims)
     x = self.input_encoder_blocks(x)  # => (batch_size, num_tokens, embedding_dims)
+    # len of iter_layer_states will be num_iters + 1
     iter_layer_states = [x]
     for _ in range(self.num_iters):
       for encoder_block in self.iter_encoder_blocks:
         x = encoder_block(x)
       iter_layer_states.append(x)
-    # len of iter_layer_states is num_iters + 1
+
     # each output has shape (batch_size, num_tokens, vocab_size)
-    return [self.output_projection(state) for state in iter_layer_states]
+    if self.training:
+      return [self.output_projection(state) for state in iter_layer_states]
+    # just return the last if not training
+    return self.output_projection(iter_layer_states[-1])

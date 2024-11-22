@@ -51,8 +51,6 @@ def main(argv):
       # Ideally, we would maintain state inside the model from previous calls
       # and only compute the layer activations for the new token.
       all_logits = model(batch)
-      if isinstance(all_logits, list):
-        all_logits = all_logits[-1]
       next_token_logits = all_logits[:, -1, :]
       temperature = 0.8
       next_token = torch.multinomial(
