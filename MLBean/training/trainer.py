@@ -6,6 +6,8 @@ import torch
 import torcheval.metrics
 
 from MLBean.configs.config_base import BaseConfig
+from MLBean.training.checkpointing import get_checkpoint_info, save_checkpoint, restore_checkpoint
+from MLBean.modules.model_and_loss import LossModelWrapper
 
 
 LABEL_KEY = "labels"
@@ -46,7 +48,7 @@ class Trainer:
   def __init__(
     self,
     config: TrainerConfig,
-    model_and_loss: torch.nn.Module,
+    model_and_loss: LossModelWrapper,
     optimizer: torch.optim.Optimizer,
     metrics: Dict[str, torcheval.metrics.Metric] = {},
     device: Optional[torch.device] = None,
@@ -63,6 +65,7 @@ class Trainer:
       self.checkpoint_dir = self.config.checkpointing.directory
     if self.checkpoint_dir is None:
       self.checkpoint_dir = os.getcwd()
+    os.makedirs(self.checkpoint_dir, exist_ok=True)
     if self.device is not None:
       print(f"Using device: {self.device}")
       for metric in self.metrics.values():
@@ -151,14 +154,10 @@ class Trainer:
     with open(metrics_jsonl_path, "a") as f:
       f.write(json.dumps(metrics) + "\n")
 
-  def maybe_save_checkpoint(self, step: int) -> datetime.timedelta:
+  def maybe_save_checkpoint(self, step: int):
     if self.config.checkpointing is None or step % self.config.checkpointing.interval != 0:
       return
-
-    dest = os.path.join(self.checkpoint_dir, f"checkpoint_{step:010d}.pt")
-    print(f"Saving checkpoint to {dest} ...... ", end="")
-    torch.save(self.model_and_loss.state_dict(), dest)
-    print("done")
+    save_checkpoint(model=self.model_and_loss, step=step, checkpoint_dir=self.checkpoint_dir)
 
   def maybe_restore_checkpoint(self) -> int:
     """
@@ -166,20 +165,7 @@ class Trainer:
     """
     if self.config.checkpointing is None:
       return 0
-    os.makedirs(self.checkpoint_dir, exist_ok=True)
-    checkpoint_files = [f for f in os.listdir(self.checkpoint_dir) if f.startswith("checkpoint_")]
-    checkpoints = {
-      int(f.split("_")[1].split(".")[0]): os.path.join(self.checkpoint_dir, f)
-      for f in checkpoint_files
-    }
-    if not checkpoints:
-      print("No checkpoints found")
-      return 0
-    latest_checkpoint = max(checkpoints.keys())
-    checkpoint_path = checkpoints[latest_checkpoint]
-    print(f"Restoring checkpoint from {checkpoint_path}")
-    self.model_and_loss.load_state_dict(torch.load(checkpoint_path, weights_only=True))
-    return latest_checkpoint
+    return restore_checkpoint(model=self.model_and_loss, checkpoint_dir=self.checkpoint_dir)
 
   def train_step(self, x: torch.Tensor) -> torch.Tensor:
     self.model_and_loss.train()

@@ -57,5 +57,5 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
   setup_flags()
-  # signal.signal(signal.SIGINT, signal_handler)
+  signal.signal(signal.SIGINT, signal_handler)
   app.run(main)
