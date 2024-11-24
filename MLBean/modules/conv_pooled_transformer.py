@@ -19,7 +19,6 @@ pooling: (max or mean) kernel size `Kp` and stride `G`
 """
 
 from typing import Optional
-import os
 import math
 
 import torch

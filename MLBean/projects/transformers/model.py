@@ -1,4 +1,3 @@
-import torch
 from MLBean.data.dataset import TextDataset
 from MLBean.modules.model_and_loss import (
   ModelAndOffsetLoss,

@@ -5,7 +5,7 @@ import pathlib
 from absl import app, flags
 
 from MLBean.data.dataset import TextPredictionDataset
-from MLBean.training.checkpointing import get_latest_checkpoint
+from MLBean.training.checkpointing import get_checkpoint_info
 
 from MLBean.projects.conv_pooled.all_config import get_all_config
 from MLBean.projects.conv_pooled.model import build_model_and_loss
@@ -34,7 +34,7 @@ def main(argv):
 
   dataset = TextPredictionDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)
-  checkpoint_path = get_latest_checkpoint(chkpt_dir, step=FLAGS.step)
+  checkpoint_path = get_checkpoint_info(chkpt_dir, step=FLAGS.step).path
   print(f"Loading checkpoint from {checkpoint_path}")
   model_and_loss.load_state_dict(torch.load(checkpoint_path, weights_only=True))
   model = model_and_loss._model.model

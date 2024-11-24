@@ -19,13 +19,14 @@ FLAGS = flags.FLAGS
 
 def setup_flags():
   flags.DEFINE_string("dir", None, "The directory to load checkpoints from")
+  flags.DEFINE_string("model", "rotary", "The model to use. Ignored if all_config.json exists.")
   flags.mark_flag_as_required("dir")
 
 
 def main(argv):
   device = get_device()
   chkpt_dir = pathlib.Path(FLAGS.dir)
-  all_config = get_all_config(chkpt_dir, maybe_create=True)
+  all_config = get_all_config(chkpt_dir, maybe_create=True, model=FLAGS.model)
   os.chdir(chkpt_dir)
 
   dataset = TextDataset.from_config(all_config.dataset_train)

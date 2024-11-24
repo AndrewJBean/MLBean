@@ -5,7 +5,6 @@ import math
 import torch
 
 from MLBean.configs.config_base import UnionLikeConfig, BaseConfig
-from MLBean.data.batch_base import DictionaryBatch
 from matplotlib import pyplot as plt
 
 
@@ -521,30 +520,6 @@ class RotaryTransformer(torch.nn.Module):
       x = encoder_block(x)
     x = self.output_projection(x)
     return x
-
-
-class DictBatchWrapper(torch.nn.Module):
-  def __init__(self, *, model: torch.nn.Module):
-    super().__init__()
-    self.model = model
-
-  def forward(self, batch: DictionaryBatch) -> DictionaryBatch:
-    return DictionaryBatch(logits=self.model(batch["inputs"]))
-
-
-class TransformerWrapper(torch.nn.Module):
-  def __init__(self, *, config: AutoregressiveTransformerConfig, pad_token: int, vocab_size: int):
-    super().__init__()
-    self.config = config
-    self.pad_token = pad_token
-    self.vocab_size = vocab_size
-    self.model = AutoregressiveTransformer(config, pad_token, vocab_size)
-
-  def forward(self, batch: DictionaryBatch) -> DictionaryBatch:
-    result = DictionaryBatch()
-    x = batch["inputs"]
-    result["logits"] = self.model(x)
-    return result
 
 
 if __name__ == "__main__":
