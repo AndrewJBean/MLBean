@@ -26,6 +26,7 @@ def main(argv):
     raise ValueError("Please specify a directory to load checkpoints from")
   chkpt_dir = pathlib.Path(FLAGS.dir)
   all_config = get_all_config(chkpt_dir, maybe_create=False)
+  # all_config.model.iterated.num_iters = 2
 
   dataset = TextDataset.from_config(all_config.dataset_train)
   model_and_loss = build_model_and_loss(all_config, dataset)

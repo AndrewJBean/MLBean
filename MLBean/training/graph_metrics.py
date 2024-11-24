@@ -18,7 +18,7 @@ def main(argv):
 
   # every line has a "step" key and other keys for metrics
   # Dict[metric_name, Dict[step, value]]
-  metrics = defaultdict(lambda: ([], []))
+  metrics = defaultdict(lambda: [[], []])
   for d in data:
     if d["split"] != FLAGS.split:
       continue
@@ -28,6 +28,11 @@ def main(argv):
         continue
       metrics[k][0].append(m["step"])
       metrics[k][1].append(v)
+
+  if "ts" in metrics:
+    times = metrics["ts"][1]
+    metrics["ts"][1] = [(t - times[0]) / 3600 / 24 for t in times]
+    metrics["days"] = metrics.pop("ts")
 
   num_graphs = len(metrics)
   num_cols = 1 if num_graphs < 3 else 2
