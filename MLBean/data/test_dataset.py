@@ -1,40 +1,28 @@
 import unittest
-import torch
 
 from MLBean.data.dataset import TextDataset, TextPredictionDataset, DatasetConfig
 
 
 class TestDataset(unittest.TestCase):
-  def test_text_dataset(self):
-    ds = TextDataset(
-      batch_size=4,
-      trunc_len=512,
-    )
+  def test_strings_to_batch_round_trip(self):
+    ds = TextDataset(batch_size=1, trunc_len=512)
+    tokens = ds.strings_to_batch(["hello world"], trunc_len=512)
+    self.assertEqual(ds.tokens_to_strings(tokens), ["hello world"])
 
-    batch = next(ds)
-    self.assertEqual(len(batch), 4)
-    self.assertTrue(all([len(row) == 512 for row in batch]))
-
-    test_str = "hello world"
-    tokens = ds.strings_to_batch([test_str], trunc_len=512)
-    new_str = ds.tokens_to_strings(tokens)
-    self.assertEqual(new_str, [test_str])
-
-  def test_text_prediction_dataset(self):
+  def test_prediction_label_shift(self):
     group_size = 4
-    config = DatasetConfig(
-      batch_size=4,
-      char_map_file="MLBean/data/character_map.txt",
-      trunc_len=512,
-      group_size=group_size,
-      special_tokens_at_end=True,
+    ds = TextPredictionDataset.from_config(
+      DatasetConfig(
+        batch_size=1,
+        char_map_file="MLBean/data/character_map.txt",
+        trunc_len=32,
+        group_size=group_size,
+      )
     )
-    ds = TextPredictionDataset.from_config(config)
+    # Avoid FineWeb: build a batch from a local string through the parent helpers.
+    batch = ds.strings_to_batch(["a" * 32], trunc_len=32)
+    batch = batch[:, : (batch.size(1) // group_size) * group_size]
+    from MLBean.data.dataset import input_label_split
 
-    batch = next(ds)
-    self.assertEqual(len(batch), 2)
-    self.assertEqual(len(batch["inputs"]), 4)
-    self.assertEqual(len(batch["labels"]), 4)
-    self.assertTrue(all([len(row) % group_size == 0 for row in batch["inputs"]]))
-    self.assertTrue(all([len(row) % group_size == 0 for row in batch["labels"]]))
-    self.assertTrue((batch["inputs"][:, group_size:] == batch["labels"][:, :-group_size]).all())
+    inputs, labels = input_label_split(batch, group_size=group_size)
+    self.assertTrue((inputs[:, group_size:] == labels[:, :-group_size]).all())
