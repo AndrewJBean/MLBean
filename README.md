@@ -1,27 +1,32 @@
 # MLBean
 My ML Experimental Stuff
 
-## Python Environment for Mac
+## Python Environment
 
-1. Install Homebrew
-1. `brew install xz`
-1. `brew install pyenv`
-1. `brew install pyenv-virtualenv`
-1. `pyenv install 3.11.9`
-1. `pyenv virtualenv 3.11.9 py3119` (Optionally choose something other than `py3119`)
-1. Add this to `~/.bash_profile` (the alias and its name `py3` are optional):
+The environment is managed with [uv](https://docs.astral.sh/uv/).
+
+1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` (or `brew install uv`)
+1. From the repo root, create the virtual environment and install everything (including dev tools):
     ```
-    eval "$(pyenv init -)"
-    eval "$(pyenv virtualenv-init -)"
-    eval "$(pyenv init --path)"
-    alias py3="pyenv activate py3119"
+    uv sync
     ```
-1. In future terminal sessions (or after `source ~/.bash_profile`) you should be able to run `py3` or `pyenv activate py3119` to activate the python virtual environment.
-1. Activate the new environment and install the required/recommended packages with
+    uv installs the Python version in `.python-version` if needed, and installs this repo in
+    editable mode, so `MLBean` imports work without setting `PYTHONPATH`.
+1. Run commands inside the environment with `uv run`, for example:
     ```
-    pip install -r /path/to/requirements.txt
+    uv run pytest
+    uv run python -m MLBean.projects.transformers.train --dir=/path/to/checkpoints
     ```
-1. Put the following someplace that will configure your terminal, e.g. `~/.zshrc` or `~/.bash_profile`, updating to the correct path (wherever this repo is cloned) as needed:
-    ```
-    export PYTHONPATH="/Users/$USER/workspace/MLBean:$PYTHONPATH"
-    ```
+    Alternatively, activate it with `source .venv/bin/activate`.
+1. Add or remove dependencies with `uv add <package>` / `uv remove <package>` (use `--dev` for
+   dev-only tools). Commit the updated `pyproject.toml` and `uv.lock`.
+
+## Data
+
+Pre-tokenize the training data into binary token shards:
+```
+uv run python -m MLBean.util.pretokenize --tokenizer=gpt2
+```
+Shards go to `~/prepared_data/<tokenizer>/` by default (override with `--out`). Stop anytime and
+train on the shards already written; run again to resume from the parquet file/row cursor and
+append more. Use `--max_tokens` for an absolute token budget, and `--overwrite` to start over.

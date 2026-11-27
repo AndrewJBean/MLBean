@@ -19,18 +19,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.11.9
-      uses: actions/setup-python@v3
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v6
       with:
-        python-version: "3.11.9"
+        enable-cache: true
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      run: uv sync --locked
     - name: Lint with cblack
-      run: |
-        cblack . -l 100
+      run: uv run cblack . -l 100
     - name: Test with pytest
-      run: |
-        export PYTHONPATH=.
-        pytest
+      run: uv run pytest
